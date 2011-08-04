@@ -99,6 +99,11 @@ typedef struct {
     git_reference *reference;
 } Reference;
 
+typedef struct {
+    PyObject_HEAD
+    git_treebuilder *treebuilder;
+} TreeBuilder;
+
 static PyTypeObject RepositoryType;
 static PyTypeObject ObjectType;
 static PyTypeObject CommitType;
@@ -112,6 +117,7 @@ static PyTypeObject IndexIterType;
 static PyTypeObject IndexEntryType;
 static PyTypeObject WalkerType;
 static PyTypeObject ReferenceType;
+static PyTypeObject TreeBuilderType;
 
 static PyObject *GitError;
 
@@ -2431,6 +2437,128 @@ static PyTypeObject ReferenceType = {
     0,                                         /* tp_new            */
 };
 
+static TreeEntry *
+TreeBuilder_getitem(TreeBuilder *self, PyObject *value)
+{
+    char *name;
+    const git_tree_entry *entry;
+
+    name = PyString_AS_STRING(value);
+    entry = git_treebuilder_get(self->treebuilder, name);
+    if (!entry) {
+        PyErr_SetObject(PyExc_KeyError, value);
+        return NULL;
+    }
+    return wrap_tree_entry(entry, NULL);
+}
+
+static PyObject *
+TreeBuilder_insert(TreeBuilder *self, PyObject *args)
+{
+    int err;
+    const char *filename;
+    git_oid oid;
+    unsigned int flags;
+
+    if (!PyArg_ParseTuple(args, "sO&I",
+                          &filename,
+                          py_str_to_git_oid, &oid,
+                          &flags))
+        return NULL;
+
+    err = git_treebuilder_insert(NULL, self->treebuilder, filename, &oid, flags);
+    if (err < 0)
+        return Error_set_str(err, filename);
+
+    Py_RETURN_NONE;
+}
+
+static int
+TreeBuilder_init(TreeBuilder *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *py_tree;
+    int err;
+
+    if (kwds) {
+        PyErr_SetString(PyExc_TypeError,
+                        "TreeBuilder takes no keyword arugments");
+        return -1;
+    }
+
+    py_tree = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &TreeType, py_tree))
+        return -1;
+
+    err = git_treebuilder_create(&self->treebuilder, py_tree ? ((Tree *)py_tree)->tree : NULL);
+    if (err < 0) {
+        Error_set_str(err, "ffffuuuuu");
+        return -1;
+    }
+
+    return 0;
+}
+
+static void
+TreeBuilder_dealloc(TreeBuilder* self)
+{
+    git_treebuilder_free(self->treebuilder);
+    self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyMappingMethods TreeBuilder_as_mapping = {
+    0,                                         /* mp_length */
+    (binaryfunc)TreeBuilder_getitem,           /* mp_subscript */
+    0,                                         /* mp_ass_subscript */
+};
+
+static PyMethodDef TreeBuilder_methods[] = {
+    {"insert", (PyCFunction)TreeBuilder_insert, METH_VARARGS,
+     "Add a tree entry"},
+    {NULL}
+};
+
+static PyTypeObject TreeBuilderType = {
+    PyObject_HEAD_INIT(NULL)
+    0,                                         /* ob_size           */
+    "pygit2.TreeBuilder",                      /* tp_name           */
+    sizeof(TreeBuilder),                       /* tp_basicsize      */
+    0,                                         /* tp_itemsize       */
+    (destructor)TreeBuilder_dealloc,           /* tp_dealloc        */
+    0,                                         /* tp_print          */
+    0,                                         /* tp_getattr        */
+    0,                                         /* tp_setattr        */
+    0,                                         /* tp_compare        */
+    0,                                         /* tp_repr           */
+    0,                                         /* tp_as_number      */
+    0,                                         /* tp_as_sequence    */
+    &TreeBuilder_as_mapping,                   /* tp_as_mapping     */
+    0,                                         /* tp_hash           */
+    0,                                         /* tp_call           */
+    0,                                         /* tp_str            */
+    0,                                         /* tp_getattro       */
+    0,                                         /* tp_setattro       */
+    0,                                         /* tp_as_buffer      */
+    Py_TPFLAGS_DEFAULT,                        /* tp_flags          */
+    "Tree builder",                            /* tp_doc            */
+    0,                                         /* tp_traverse       */
+    0,                                         /* tp_clear          */
+    0,                                         /* tp_richcompare    */
+    0,                                         /* tp_weaklistoffset */
+    0,                                         /* tp_iter           */
+    0,                                         /* tp_iternext       */
+    TreeBuilder_methods,                       /* tp_methods        */
+    0,                                         /* tp_members        */
+    0,                                         /* tp_getset         */
+    0,                                         /* tp_base           */
+    0,                                         /* tp_dict           */
+    0,                                         /* tp_descr_get      */
+    0,                                         /* tp_descr_set      */
+    0,                                         /* tp_dictoffset     */
+    (initproc)TreeBuilder_init,                /* tp_init           */
+    0,                                         /* tp_alloc          */
+    0,                                         /* tp_new            */
+};
+
 static PyObject *
 init_repository(PyObject *self, PyObject *args)
 {
@@ -2509,6 +2637,9 @@ initpygit2(void)
     ReferenceType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&ReferenceType) < 0)
         return;
+    TreeBuilderType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeBuilderType) < 0)
+        return;
 
     m = Py_InitModule3("pygit2", module_methods,
                        "Python bindings for libgit2.");
@@ -2548,6 +2679,9 @@ initpygit2(void)
 
     Py_INCREF(&ReferenceType);
     PyModule_AddObject(m, "Reference", (PyObject *)&ReferenceType);
+
+    Py_INCREF(&TreeBuilderType);
+    PyModule_AddObject(m, "TreeBuilder", (PyObject *)&TreeBuilderType);
 
     PyModule_AddIntConstant(m, "GIT_OBJ_ANY", GIT_OBJ_ANY);
     PyModule_AddIntConstant(m, "GIT_OBJ_COMMIT", GIT_OBJ_COMMIT);
