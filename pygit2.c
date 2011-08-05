@@ -1266,7 +1266,8 @@ wrap_tree_entry(const git_tree_entry *entry, Tree *tree)
 
     py_entry->entry = entry;
     py_entry->tree = tree;
-    Py_INCREF(tree);
+    if (tree)
+        Py_INCREF(tree);
     return py_entry;
 }
 
@@ -2476,20 +2477,20 @@ TreeBuilder_insert(TreeBuilder *self, PyObject *args)
 static int
 TreeBuilder_init(TreeBuilder *self, PyObject *args, PyObject *kwds)
 {
-    PyObject *py_tree;
+    Tree *py_tree;
     int err;
 
     if (kwds) {
         PyErr_SetString(PyExc_TypeError,
-                        "TreeBuilder takes no keyword arugments");
+                        "TreeBuilder takes no keyword arguments");
         return -1;
     }
 
     py_tree = NULL;
-    if (!PyArg_ParseTuple(args, "|O", &TreeType, py_tree))
+    if (!PyArg_ParseTuple(args, "|O!", &TreeType, &py_tree))
         return -1;
 
-    err = git_treebuilder_create(&self->treebuilder, py_tree ? ((Tree *)py_tree)->tree : NULL);
+    err = git_treebuilder_create(&self->treebuilder, py_tree ? py_tree->tree : NULL);
     if (err < 0) {
         Error_set_str(err, "ffffuuuuu");
         return -1;
@@ -2501,7 +2502,8 @@ TreeBuilder_init(TreeBuilder *self, PyObject *args, PyObject *kwds)
 static void
 TreeBuilder_dealloc(TreeBuilder* self)
 {
-    git_treebuilder_free(self->treebuilder);
+    if (self && self->treebuilder)
+        git_treebuilder_free(self->treebuilder);
     self->ob_type->tp_free((PyObject*)self);
 }
 

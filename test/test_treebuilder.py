@@ -36,6 +36,8 @@ import pygit2
 import utils
 
 TREE_SHA = '967fce8df97cc71722d3c2a5930ef3e6f1d27b12'
+BLOB_SHA = 'af431f20fc541ed6d5afede3e2dc7160f6f01f16'
+ALT_BLOB_SHA = '85f120ee4dac60d0719fd51731e4199aa5a37df6'
 
 class TreeBuilderTest(utils.BareRepoTestCase):
 
@@ -46,14 +48,40 @@ class TreeBuilderTest(utils.BareRepoTestCase):
                          '0%o != 0%o' % (entry.attributes, attributes))
 
     def test_empty_treebuilder(self):
-        pass
+        builder = pygit2.TreeBuilder()
+        self.assertTrue(builder)
+        self.assertRaises(KeyError, lambda: builder['foo'])
 
     def test_treebuilder_from_tree(self):
         tree = self.repo[TREE_SHA]
         builder = pygit2.TreeBuilder(tree)
         self.assertTrue(tree['a'])
-        self.assertTrue(builder['a'])
-        self.assertTreeEntryEqual(tree['a'], builder['a'])
+        ba = builder['a']    
+        self.assertTrue(ba)
+        self.assertTreeEntryEqual(tree['a'], ba.sha, ba.name, ba.attributes)
+
+    def test_treebuilder_insert(self):
+        # insert can both insert and update
+        builder = pygit2.TreeBuilder()
+        builder.insert("foo", BLOB_SHA, 0775)
+        ba = builder['foo']    
+        self.assertTrue(ba)
+        self.assertEqual(ba.attributes, 0775)
+
+        builder.insert("foo", BLOB_SHA, 0664)
+        ba = builder['foo']    
+        self.assertTrue(ba)
+        self.assertEqual(ba.attributes, 0664)
+
+        builder.insert("bar", BLOB_SHA, 0664)
+        ba = builder['bar']    
+        self.assertTrue(ba)
+        self.assertTreeEntryEqual(ba, BLOB_SHA, 'bar', 0664)
+
+        builder.insert("bar", ALT_BLOB_SHA, 0664)
+        ba = builder['bar']    
+        self.assertTrue(ba)
+        self.assertTreeEntryEqual(ba, ALT_BLOB_SHA, 'bar', 0664)
 
 if __name__ == '__main__':
   unittest.main()
