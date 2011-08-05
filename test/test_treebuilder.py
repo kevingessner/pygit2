@@ -83,5 +83,14 @@ class TreeBuilderTest(utils.BareRepoTestCase):
         self.assertTrue(ba)
         self.assertTreeEntryEqual(ba, ALT_BLOB_SHA, 'bar', 0664)
 
+    def test_treebuilder_remove(self):
+        builder = pygit2.TreeBuilder()
+        builder.insert("foo", BLOB_SHA, 0775)
+        self.assertTrue(builder['foo'])
+        builder.remove('foo')
+        self.assertRaises(KeyError, lambda: builder['foo'])
+
+        self.assertRaises(KeyError, lambda: builder['bar'])
+
 if __name__ == '__main__':
   unittest.main()

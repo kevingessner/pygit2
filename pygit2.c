@@ -2474,6 +2474,24 @@ TreeBuilder_insert(TreeBuilder *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+
+static PyObject *
+TreeBuilder_remove(TreeBuilder *self, PyObject *py_filename)
+{
+    char *filename;
+    int err;
+
+    filename = PyString_AsString(py_filename);
+    if (!filename)
+        return NULL;
+
+    err = git_treebuilder_remove(self->treebuilder, filename);
+    if (err < 0)
+        return Error_set_str(err, filename);
+
+    Py_RETURN_NONE;
+}
+
 static int
 TreeBuilder_init(TreeBuilder *self, PyObject *args, PyObject *kwds)
 {
@@ -2516,6 +2534,8 @@ static PyMappingMethods TreeBuilder_as_mapping = {
 static PyMethodDef TreeBuilder_methods[] = {
     {"insert", (PyCFunction)TreeBuilder_insert, METH_VARARGS,
      "Add a tree entry"},
+    {"remove", (PyCFunction)TreeBuilder_remove, METH_O,
+     "Remove a tree entry by filename"},
     {NULL}
 };
 
